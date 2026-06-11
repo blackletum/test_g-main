@@ -1,0 +1,7 @@
+#!/bin/sh
+
+while :
+do
+   top -bn 1 -p $1 | grep $1 | awk '{print $11 FS $9 FS $10}' >> "$1".log
+   sleep $2
+done

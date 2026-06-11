@@ -1,0 +1,305 @@
+#!/bin/sh
+
+declare -a info_addr
+declare -i info_count
+
+declare -a channel_addr
+declare -a channel_domain_name
+declare -a channel_server_id
+declare -a channel_channel_id
+declare -i channel_count
+
+function debug_proxy()
+{
+	debug_level_proxy=$1
+}
+
+function debug_channel()
+{
+	debug_level_channel=$1
+}
+
+function debug_apex()
+{
+	debug_level_apex=$1
+}
+
+function debug_login()
+{
+	debug_level_login=$1
+}
+
+function debug_match()
+{
+	debug_level_match=$1
+}
+
+
+function log_proxy()
+{
+	log_path_proxy=$1
+}
+
+function log_channel()
+{
+	log_path_channel=$1
+}
+
+function log_apex()
+{
+	log_path_apex=$1
+}
+
+function log_login()
+{
+	log_path_login=$1
+}
+
+function log_match()
+{
+	log_path_match=$1
+}
+
+
+function cfg_proxy()
+{
+	cfg_path_proxy=$1
+}
+
+function cfg_channel()
+{
+	cfg_path_channel=$1
+}
+
+function cfg_apex()
+{
+	cfg_path_apex=$1
+}
+
+function cfg_login()
+{
+	cfg_path_login=$1
+}
+
+function cfg_match()
+{
+	cfg_path_match=$1
+}
+
+
+function infoserver()
+{
+	info_addr[$info_count]=$1
+	info_count=$info_count+1
+}
+
+function proxyserver()
+{
+	proxy_client_addr=$1
+	proxy_channel_addr=$2
+	proxy_gm_addr=$3
+}
+
+function channelserver()
+{
+	channel_server_id[$channel_count]=$1
+	channel_channel_id[$channel_count]=$2
+	channel_addr[$channel_count]=$3
+	channel_domain_name[$channel_count]=$4
+	channel_count=$channel_count+1
+}
+
+function apexserver()
+{
+	apex_addr=$1
+}
+
+function loginserver()
+{
+	login_addr=$1
+}
+
+function matchingserver()
+{
+	match_addr=$1
+}
+
+# source config script
+source ./fc_config
+
+# server command list
+declare -a command_list
+declare -i command_count
+
+function get_address()
+{
+	addr=`echo $1 | sed -r "s/([0-9.]*):[0-9]+/\1/"`
+	if [ -z $addr ]; then
+		echo ${2:-0.0.0.0}
+	else
+		echo $addr
+	fi
+}
+
+function is_valid_address()
+{
+	addr=`get_address $1`
+
+	# all address is always a valid address
+	if [ "$addr" == "0.0.0.0" ]; then
+		return 0
+	fi
+
+	# search local address
+	for ip in `ifconfig | sed -nr "s/ *inet addr:([0-9.]+).*$/\1/p"`; do
+		if [ "$addr" == "$ip" ]; then
+			return 0
+		fi
+	done
+
+	return 1
+}
+
+function add_command()
+{
+	command_list[$command_count]="$1"
+	command_count=$command_count+1
+}
+
+function countdown() {
+	declare -i seconds
+	declare -i minutes
+	declare -i notified
+	seconds=$2
+	notified=0
+
+	while [ $seconds -gt 0 ]; do
+		minutes=($seconds+59)/60
+		msg=""
+		if [ $minutes -gt 1 ]; then
+			if [ $minutes -ne $notified ]; then
+				msg="服务器将在$minutes分钟后$1"
+				notified=$minutes
+			fi
+		else
+			msg="服务器将在$seconds秒后$1"
+		fi
+
+		if [ -n "$msg" ]; then
+			echo $msg
+			./gmconsole -p $proxy_gm_addr broadcast 0 0 "/sys" "" "$msg"
+		fi
+
+		sleep 1
+		seconds=$seconds-1
+	done
+}
+
+function start()
+{
+	for c in "${command_list[@]}"; do
+		nohup ./checkProcess.sh "$c" &
+	done
+	
+	sleep 5
+	
+	nohup ./fc_status_log.sh > fc_status_log.out &
+}
+
+function stop()
+{
+	for c in "${command_list[@]}"; do
+		pkill -f "$c"
+	done
+	
+	pkill -f fc_status_log.sh
+}
+
+# build apex server command
+if is_valid_address $apex_addr; then
+	#CMD="./fwgserverxl --daemon"
+	CMD="./apexserver --daemon"
+	CMD+=" --log $log_path_apex"
+	CMD+=" --config $cfg_path_apex"
+	CMD+=" --debug $debug_level_apex"
+	CMD+=" --address=$apex_addr"
+
+	add_command "$CMD"
+fi
+
+# build match server command
+if is_valid_address $match_addr; then
+	CMD="./matchingserver --daemon"
+	CMD+=" --log $log_path_match"
+	CMD+=" --config $cfg_path_match"
+	CMD+=" --debug $debug_level_match"
+	CMD+=" --proxy_listen $match_addr"
+
+	add_command "$CMD"
+fi
+
+# build login server command
+#if is_valid_address $login_addr; then
+#	CMD="./loginserver --daemon"
+#	CMD+=" --log $log_path_login"
+#	CMD+=" --config $cfg_path_login"
+#	CMD+=" --debug $debug_level_login"
+#	CMD+=" --address=$login_addr"
+#
+#	add_command "$CMD"
+#fi
+
+# build proxy server commands
+if is_valid_address $proxy_client_addr; then
+	CMD="./proxyserver --daemon"
+	CMD+=" --log $log_path_proxy"
+	CMD+=" --config $cfg_path_proxy"
+	CMD+=" --debug $debug_level_proxy"
+	CMD+=" --client-listen=$proxy_client_addr"
+	CMD+=" --channel-listen=$proxy_channel_addr"
+	CMD+=" --gm-listen=$proxy_gm_addr"
+	CMD+=" --apex-server=$apex_addr"
+	CMD+=" --match-server=$match_addr"
+
+	for info in ${info_addr[*]}; do
+		CMD+=" -i $info"
+	done
+
+	add_command "$CMD"
+fi
+
+# foreach channel
+for ((i=0; i<$channel_count; i=$i+1)); do
+	if is_valid_address ${channel_addr[$i]}; then
+		CMD="./channelserver --daemon"
+		CMD+=" --log $log_path_channel"
+		CMD+=" --config $cfg_path_channel"
+		CMD+=" --debug $debug_level_channel"
+		CMD+=" --server-id=${channel_server_id[$i]}"
+		CMD+=" --channel-id=${channel_channel_id[$i]}"
+		CMD+=" --channel-addr=${channel_addr[$i]}"
+		CMD+=" --channel-domain-name=${channel_domain_name[$i]}"
+		CMD+=" --proxy-addr=${proxy_channel_addr}"
+
+		add_command "$CMD"
+	fi
+done
+
+case "$1" in
+	start)
+		start
+		;;
+	stop)
+		countdown "关闭！" $2
+		stop
+		;;
+	restart)
+		countdown "重新启动！" $2
+		stop
+		start
+		;;
+	*)
+		echo "Usage: $0 (start|stop|restart)"
+		exit 1
+		;;
+esac

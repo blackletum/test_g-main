@@ -1,0 +1,54 @@
+# debug
+debug_proxy 10
+debug_channel 10
+debug_apex 10
+debug_login 10
+debug_match 10
+
+# log
+log_proxy 10.10.12.12:11111
+log_channel 10.10.12.12:11111
+log_apex 10.10.12.12:11111
+log_login 10.10.12.12:11111
+log_match 10.10.12.12:11111
+
+# cfg
+cfg_proxy ./proxy.cfg
+cfg_channel ./channel.cfg
+cfg_apex ./apex.cfg
+cfg_login ./login.cfg
+cfg_match ./match.cfg
+
+# apex server
+apexserver 10.10.12.12:9003
+
+# login server
+loginserver 10.10.12.12:9004
+
+# info server list
+#infoserver 10.10.12.12:30000
+#infoserver 10.10.12.11:29000
+infoserver 192.168.2.7:8090
+#infoserver 10.10.12.14:8081
+#infoserver 192.168.1.20:8082
+#infoserver 192.168.1.201:8082
+#infoserver 192.168.1.186:8082
+
+# proxy server
+proxyserver 0.0.0.0:15000 10.10.12.12:9001 10.10.12.12:9002
+
+# channel address
+channelserver 1 1 10.10.12.12:9011 10.10.12.12
+#channelserver 1 2 10.10.12.12:9012 10.10.12.12
+
+channelserver 2 1 10.10.12.12:9013 10.10.12.12
+#channelserver 2 2 10.10.12.12:9014 10.10.12.12
+
+channelserver 6 1 10.10.12.12:9014 10.10.12.12
+#channelserver 14 1 10.10.12.12:9015 10.10.12.12
+channelserver 15 1 10.10.12.12:9019 10.10.12.12
+channelserver 19 1 10.10.12.12:9016 10.10.12.12
+
+
+#matchingserver
+matchingserver 0.0.0.0:16000
